@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '../../../utils/supabase';
 
+// 💡 이 코드가 핵심입니다! (Next.js가 옛날 데이터를 기억하지 않고 매번 새로 DB에서 가져오게 함)
+export const dynamic = 'force-dynamic'; 
+
 export async function GET() {
     const { data, error } = await supabase.from('test_messages').select('*').order('created_at', { ascending: false });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
