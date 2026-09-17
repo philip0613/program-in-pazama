@@ -16,6 +16,7 @@ function showError(msg) {
     errorBox.style.display = 'block';
 }
 
+// 서유민 vs확인
 // 1. 데이터 읽기 (Select)
 async function loadMessages() {
     errorBox.style.display = 'none';
