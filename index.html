@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DB 연결 테스트</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Supabase CDN 로드 -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>DB 연결 테스트 🚀</h1>
+
+        <!-- 에러 발생 시 출력 박스 -->
+        <div id="error-box" class="error-box" style="display: none;"></div>
+
+        <!-- 데이터 입력 폼 -->
+        <form id="message-form" class="input-group">
+            <input type="text" id="message-input" placeholder="메시지를 입력하세요" autocomplete="off" required>
+            <button type="submit" id="submit-btn">저장</button>
+        </form>
+
+        <!-- 데이터 출력 구역 -->
+        <div class="card">
+            <h2>저장된 데이터 목록</h2>
+            <p id="loading-text" class="status-text">데이터를 불러오는 중...</p>
+            <ul id="message-list"></ul>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
