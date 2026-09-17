@@ -10,7 +10,7 @@ const messageList = document.getElementById('message-list');
 const loadingText = document.getElementById('loading-text');
 const errorBox = document.getElementById('error-box');
 
-// 에러 화면 출력 함수
+// 에러 화면 출력  함수
 function showError(msg) {
     errorBox.textContent = `통신 에러: ${msg}`;
     errorBox.style.display = 'block';
