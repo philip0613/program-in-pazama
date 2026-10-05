@@ -15,13 +15,34 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
+// RDS에 게시판 테이블 자동 생성 함수
+async function initDB() {
+  const query = `
+    CREATE TABLE IF NOT EXISTS posts (
+      id SERIAL PRIMARY KEY,
+      user_id VARCHAR(255) NOT NULL,
+      user_email VARCHAR(255) NOT NULL,
+      title VARCHAR(255) NOT NULL,
+      content TEXT NOT NULL,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+  `;
+  try {
+    await pool.query(query);
+    console.log('✅ posts 테이블 준비 완료');
+  } catch (err) {
+    console.error('❌ posts 테이블 생성 오류:', err.message);
+  }
+}
+initDB();
+
 // Supabase 클라이언트 초기화
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_ANON_KEY
 );
 
-// Supabase 공식 토큰 검증 미들웨어
+// 토큰 인증 미들웨어
 async function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -30,7 +51,6 @@ async function authenticateToken(req, res, next) {
     return res.status(401).json({ error: '인증 토큰이 누락되었습니다.' });
   }
 
-  // Supabase Auth 서버에 직접 토큰 유효성 검증 요청
   const { data: { user }, error } = await supabase.auth.getUser(token);
 
   if (error || !user) {
@@ -40,36 +60,43 @@ async function authenticateToken(req, res, next) {
     });
   }
 
-  req.user = user; // 유저 정보 req에 저장
+  req.user = user;
   next();
 }
 
 app.get('/health', (req, res) => res.status(200).send('OK'));
 app.get('/', (req, res) => res.json({ status: 'online', message: 'SOYO API Server' }));
 
-// RDS DB 연결 테스트
-app.get('/api/test-db', async (req, res) => {
+// 1. 게시글 목록 불러오기 (비회원도 열람 가능)
+app.get('/api/posts', async (req, res) => {
   try {
-    const result = await pool.query('SELECT NOW() as db_time, current_database() as db_name;');
-    res.json({
-      status: 'success',
-      message: 'AWS RDS 연결 성공!',
-      database: result.rows[0].db_name,
-      serverTime: result.rows[0].db_time
-    });
+    const result = await pool.query('SELECT * FROM posts ORDER BY created_at DESC');
+    res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ status: 'error', error: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
-// 로그인 회원 전용 엔드포인트
-app.get('/api/protected', authenticateToken, (req, res) => {
-  res.json({
-    status: 'authorized',
-    message: '인증 성공! 백엔드가 로그인된 유저를 확인했습니다.',
-    userId: req.user.id,
-    email: req.user.email
-  });
+// 2. 게시글 작성하기 (로그인 필수)
+app.post('/api/posts', authenticateToken, async (req, res) => {
+  const { title, content } = req.body;
+
+  if (!title || !content) {
+    return res.status(400).json({ error: '제목과 내용을 모두 입력해주세요.' });
+  }
+
+  try {
+    const query = `
+      INSERT INTO posts (user_id, user_email, title, content)
+      VALUES ($1, $2, $3, $4)
+      RETURNING *;
+    `;
+    const values = [req.user.id, req.user.email, title, content];
+    const result = await pool.query(query, values);
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.listen(PORT, '0.0.0.0', () => {
