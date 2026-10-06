@@ -18,7 +18,7 @@
 
 | 순서 | 할 일 | 방법 |
 |---|---|---|
-| ① | **GitHub 가입** | https://github.com/signup → 가입 후 **아이디를 단톡방에 올리기** |
+| ① | **GitHub 아이디 알려주기** | 내 아이디를 단톡방에 올리기 (모르면 github.com 로그인 → 오른쪽 위 프로필 사진 클릭 → 굵은 글씨 이름 옆 아이디) |
 | ② | **초대 수락** | 이메일로 온 초대 메일에서 **Accept invitation** 클릭 (레포 2개 모두) |
 | ③ | **Node.js 설치** | https://nodejs.org → 왼쪽 초록 버튼 **LTS** 다운로드 → 계속 "다음" |
 | ④ | **GitHub Desktop 설치** | https://desktop.github.com → 설치 후 **Sign in to GitHub.com** 으로 로그인 |
