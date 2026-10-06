@@ -2,8 +2,12 @@
 
 Node.js + Express API 서버입니다. 프론트엔드: [programing-in-pajama](https://github.com/philip0613/programing-in-pajama)
 
+> 🐣 **Git/GitHub 이 처음이라면 → [초보자 가이드](docs/GUIDE.md) 부터 보세요!** (명령어 없이 버튼으로만)
+
 ## 처음 실행하기
-Node.js 20 이상이 필요합니다.
+**가장 쉬운 방법:** 폴더 안의 `실행하기.bat` 더블클릭 (맥은 `실행하기-맥.command`). 설치부터 실행까지 자동으로 해줘요.
+
+터미널로 직접 하려면 (Node.js 20 이상 필요):
 
 ```bash
 git clone https://github.com/philip0613/program-in-pazama.git
