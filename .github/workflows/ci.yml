@@ -1,0 +1,21 @@
+# PR 을 올리면 서버가 정상적으로 켜지고 /api/test 가 응답하는지 자동으로 검사합니다.
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: 서버 실행 후 헬스체크
+        run: |
+          node index.js &
+          for i in $(seq 1 10); do curl -sf http://localhost:8080/api/test && exit 0; sleep 1; done
+          echo "서버가 응답하지 않습니다" && exit 1
