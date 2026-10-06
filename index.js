@@ -14,10 +14,15 @@ const allowedOrigins = [
   ...(process.env.CORS_ORIGINS || '').split(',').map((o) => o.trim()).filter(Boolean)
 ];
 
+// 같은 Amplify 앱의 다른 브랜치/PR 미리보기 주소 (예: https://pr-3.darvmwywsdw78.amplifyapp.com)
+const amplifyPreviewPattern = /^https:\/\/[a-z0-9-]+\.darvmwywsdw78\.amplifyapp\.com$/;
+
 app.use(cors({
   origin(origin, callback) {
     // Origin 헤더가 없는 요청(curl, 서버 간 호출, 헬스체크)은 허용
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    if (!origin || allowedOrigins.includes(origin) || amplifyPreviewPattern.test(origin)) {
+      return callback(null, true);
+    }
     callback(null, false);
   }
 }));
