@@ -96,7 +96,7 @@ async function ensureIdentity() {
 }
 
 const currentBranch = () => git(['branch', '--show-current']).out;
-const changedLines = () => git(['status', '--porcelain'], { raw: true }).out.split('\n').filter(Boolean);
+const changedLines = () => git(['status', '--porcelain', '--untracked-files=all'], { raw: true }).out.split('\n').filter(Boolean);
 const isDirty = () => changedLines().length > 0;
 const countCommits = (range) => Number(git(['rev-list', '--count', range], { allowFail: true }).out || 0);
 const refExists = (ref) => git(['rev-parse', '--verify', '--quiet', ref], { allowFail: true }).ok;
@@ -281,7 +281,7 @@ function run() {
   const installed = fs.existsSync(stampFile) && fs.readFileSync(stampFile, 'utf8') === lockHash;
   if (!installed) {
     say('📦 필요한 파일을 설치하는 중... (처음이나 친구가 새 라이브러리를 추가했을 때만, 1~2분 걸려요)');
-    const r = spawnSync('npm', [fs.existsSync(lockFile) ? 'ci' : 'install', '--no-fund', '--no-audit'], {
+    const r = spawnSync('npm', [fs.existsSync(lockFile) ? 'ci' : 'install', '--no-fund', '--no-audit', '--loglevel=error'], {
       cwd: ROOT, stdio: 'inherit', shell: IS_WIN
     });
     if (r.status !== 0) fail(`설치에 실패했어요. ${HELP}`);
