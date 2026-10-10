@@ -1,90 +1,69 @@
-# Antigravity 에이전트 워크스페이스 지침: 소요(SOYO) Backend
+# Antigravity 에이전트 지침: 소요 (SOYO) 백엔드 & 멀티레포 종합 지침서
 
-본 문서는 **소요(SOYO) 백엔드 (`PIP-Backend`)** 개발을 전담하는 AI 에이전트의 작업 지침 및 프로젝트 규약입니다.
-
----
-
-## 🏛️ 프로젝트 개요 및 협업 아키텍처
-
-- **프로젝트명**: 소요 (SOYO) - 웰니스·관광·건강 맞춤형 산책 및 여행 추천 서비스
-- **협업 구조**: 멀티 레포 (Multi-Repo) 방식
-  - **백엔드 (주 작업 대상)**: `d:\관광데이터\PIP-Backend` (Node.js/Express, Port `8080`)
-  - **프론트엔드 (참조/연동)**: `d:\관광데이터\PIP-Frontend` (React/Vite, Port `5173`)
-  - **기획 및 레퍼런스**: `d:\관광데이터\` 루트 내 기획서 및 데이터셋 문서
-    - `SOYO_기능.txt`: 서비스 전체 플로우 및 상세 화면/기능 기획서
-    - `SOYO_FE_BE_변수명.txt`: 프론트엔드 ↔ 백엔드 간 표준 DTO 및 변수명 사전
-    - `1차_제출_기획서.txt`: 학술제 기획 원본 문서
-    - `VitalRoot/`: 기존 프로토타입 알고리즘, 공공데이터 API, DUR 로직 아카이브
+본 문서는 **소요 (SOYO)** 프로젝트의 백엔드(`PIP-Backend`) 및 프론트엔드(`PIP-Frontend`) 연동 개발을 전담하는 AI 에이전트의 통합 작업 지침서입니다.
 
 ---
 
-## 🚨 핵심 협업 원칙 (Strict Rules)
-1. **프론트엔드 선행 작업 동기화 원칙**:
-   * 백엔드는 반드시 **프론트엔드가 실제 작업하여 요청한 화면/기능 범위에 대해서만** 작업합니다.
-   * 프론트엔드 요청이 없는 영역이나 미래 기능을 임의로 앞서서 구현하지 않습니다.
-   * 사용자가 피그마 디자인 스크린샷 및 화면별 요청 사항을 제공하면, 해당 스펙에 맞춰 연산·API를 작성합니다.
-2. **데이터베이스(DB) 임의 수정 금지**:
-   * 팀 리더가 Supabase DB 스키마 구축을 완료하기 전까지는 DB 테이블 생성/변경 등 DDL 작업을 임의로 실행하지 않습니다.
-   * `pip_database.sql` 및 DB 문서는 데이터 구조 참조용으로만 읽고 대기합니다.
+## 🏛️ 1. 프로젝트 구성 및 환경 명세
+
+### 📁 디렉터리 및 워크스페이스 구조
+* **백엔드 (주 작업 대상)**: `d:\관광데이터\PIP-Backend` (Node.js/Express, Port `8080`)
+* **프론트엔드 (연동 및 참조)**: `d:\관광데이터\PIP-Frontend` (React 18 / Vite, Port `5173`)
+* **프로덕션 배포 URL**:
+  * 프론트엔드: `https://main.d3p7uoybais0cu.amplifyapp.com/` (AWS Amplify)
+  * 백엔드 CORS 허용: `http://localhost:5173`, `https://main.d3p7uoybais0cu.amplifyapp.com` 등
+* **기획 및 명세 문서 (로컬 루트)**:
+  * `SOYO_기능.txt`: 전체 서비스 흐름, 상세 화면/기능 기획서
+  * `SOYO_FE_BE_변수명.txt`: 프론트 ↔ 백엔드 통신 표준 카멜케이스 DTO 사전
+  * `pip_database.sql`: AWS RDS PostgreSQL 데이터베이스 스키마 정의서
+  * `VitalRoot/`: 공공데이터 API, DUR 알고리즘, 지역 코스 빌더 프로토타입 원본
+
+### 🔑 데이터베이스 및 인프라
+* **AWS RDS PostgreSQL**:
+  * 호스트: `soyo-db.cpgkqiowy0f0.ap-southeast-2.rds.amazonaws.com:5432`
+  * DB: `SOYO` / 유저: `miniyumini`
+  * 연결 설정: `PIP-Backend/.env` 내 `DATABASE_URL` 설정 완료 (SSL 접속)
+* **인증 인프라**: Supabase Auth (`https://biruuwsoinqtlhdwbajh.supabase.co`)
+* **공공데이터포털 공통 인증키**: 한국관광공사 TourAPI, 식약처 DUR, 식품영양성분DB 키 구비
 
 ---
 
-## 🔑 환경 변수 및 인프라 명세 (`.env`)
+## 🚨 2. 핵심 협업 원칙 (Strict Rules)
 
-백엔드는 아래 환경 변수를 기반으로 구동됩니다 (`PIP-Backend/.env`):
-```env
-PORT=8080
+1. **프론트엔드 선행 작업 동기화 원칙 (임의 창작 엄격 금지)**
+   * 백엔드는 반드시 **프론트엔드가 실제로 작업하여 요청한 화면/기능 범위에 대해서만** 개발합니다.
+   * **프론트에 아직 없는 화면(예: No.4 지도 검색 화면, No.5 코스 바텀시트 등)을 임의로 앞서서 만들지 않습니다.** 팀원이 실제 작업 소스를 올렸을 때만 동기화하여 연동합니다.
+   * 디자인은 사용자가 전달하는 피그마 스크린샷과 요구사항을 기준으로 맞춥니다.
 
-# 데이터베이스 (AWS RDS PostgreSQL & Supabase)
-DATABASE_URL=
-SUPABASE_URL=https://biruuwsoinqtlhdwbajh.supabase.co
-SUPABASE_ANON_KEY=
+2. **철저한 계정 검증 및 인증 규칙 (무조건 통과 금지)**
+   * 시연용이라도 아무 값이나 입력했을 때 무조건 로그인되는 처리를 금지합니다.
+   * 기획서 명세 준수:
+     * 가입된 계정인지 확인하고, 불일치 시 메인으로 넘어가지 않고 **`「아이디/비밀번호를 확인하세요」`** 오류 메시지를 표시하며 비밀번호 입력을 초기화합니다.
+     * 실제 회원가입을 마친 계정으로 로그인해야만 인증이 통과되어 개인화 화면으로 진입합니다.
 
-# 공공데이터포털 공통 인증키 (TourAPI, DUR 안전정보, 식품영양성분DB)
-TOUR_API_KEY=403b2fe19eec414cb6ba3fbdaed716ee3a54adb732b82e1c9aca7e2d1835e9d7
-DUR_API_KEY=403b2fe19eec414cb6ba3fbdaed716ee3a54adb732b82e1c9aca7e2d1835e9d7
-FOOD_API_KEY=403b2fe19eec414cb6ba3fbdaed716ee3a54adb732b82e1c9aca7e2d1835e9d7
+3. **실제 데이터 동기화 원칙 (하드코딩 더미 목 데이터 배제)**
+   * 마이페이지 등 사용자 정보 화면에 고정된 더미 데이터(`홍길동`, `korean1234@gmail.com`)가 노출되지 않도록, **회원가입 시 사용자가 실제로 입력한 이름·이메일·생년월일·질환·약물 데이터**를 스토어/DB와 직접 연동합니다.
 
-# 도보 경로 / 맵 서비스 (선택)
-TMAP_API_KEY=
-NAVER_MAP_CLIENT_ID=pncc3tq0gp
+4. **소셜 로그인 제공 범위**
+   * **네이버는 제외**하며, 오직 **카카오**와 **구글** 2개 소셜 로그인만 유지하고 Supabase OAuth(`signInWithOAuth`)로 처리합니다.
 
-# CORS 허용 출처
-CORS_ORIGINS=http://localhost:5173,http://localhost:3000
-```
+5. **데이터베이스(DB) 임의 DDL 작업 금지**
+   * 팀 리더가 Supabase DB 스키마 구축을 완료하기 전까지는 테이블 삭제/수정 등 DDL 작업을 임의로 실행하지 않고 읽기/연동용으로 대기합니다.
 
----
-
-## 📐 개발 파이프라인 및 구현 지침
-
-### 1. 표준 변수명 준수 (`SOYO_FE_BE_변수명.txt`)
-* 프론트엔드와 통신하는 모든 JSON Request/Response 필드는 `SOYO_FE_BE_변수명.txt`에 명시된 카멜케이스(camelCase) 표준을 엄격히 준수합니다.
-* 예시:
-  - 인증/회원가입: `email`, `password`, `passwordConfirm`, `name`, `authMode`, `termsAgreed`
-  - 산책/코스 추천: `activeTab`, `activeScreen`, `durationMinutes`, `hasRestaurant`, `courseList`, `routeDetail`
-  - 건강 정보: `healthStatus`, `diseaseIds`, `diseaseList`, `otherDisease`
-
-### 2. VitalRoot 핵심 로직의 백엔드 서비스 모듈화
-기존 `VitalRoot/src/utils/` 및 `VitalRoot/src/config/`에 작성된 로직들을 백엔드 아키텍처에 맞게 Express 서비스 모듈로 이전합니다:
-* `regionalCourseQuestBuilder.ts` ➡️ `services/courseService.js` (시간대별 10분/25분/60분 맞춤 산책 코스 연산)
-* `tourApi.ts` ➡️ `services/tourApiService.js` (한국관광공사 지역 기반 관광지/음식점 필터링)
-* `durService.ts` ➡️ `services/durService.js` (식약처 DUR 병용금기 및 주의성분 연산)
-* `pedestrianRouter.ts` ➡️ `services/routerService.js` (보행자 경로 좌표열 생성)
-* `wellnessData.ts` / `verifiedLandmarks.ts` ➡️ `lib/data/` (정적 랜드마크 및 웰니스 데이터)
-
-### 3. 라우트 설계 원칙 (`routes/`)
-* 엔드포인트는 RESTful 규칙을 따르며 `index.js`에 마운트합니다.
-  - `/api/auth`: 회원가입, 로그인, 이메일 인증, 계정 찾기
-  - `/api/courses`: 지역 검색, 산책 코스 필터링 및 추천 연산 (`duration`, `restaurant` 조건)
-  - `/api/walk`: 산책 세션 시작, 진행 좌표 추적, 산책 완료 기록
-  - `/api/places`: 관광지, 음식점, 웰니스 스팟 조회 (TourAPI 연동)
-  - `/api/health`: 사용자 건강/질병 정보 및 DUR 주의 정보 연산
+6. **언어 표준 및 로그/에러 메시지 규약**
+   * 모든 사용자 에러 문구 및 안내 메시지는 `SOYO_기능.txt`에 명시된 **표준 한국어**로 통일합니다.
+   * 프론트 콘솔 및 백엔드 터미널 로그는 `✅`, `⚠️`, `❌` 태그를 부착하여 원인을 즉시 식별할 수 있도록 출력합니다.
+   * 질환(`diseaseIds`), 알레르기(`allergies`), 복용 약물(`medications`)은 향후 AI 및 코스 빌더 알고리즘의 표준 입력 DTO 규격을 준수합니다.
 
 ---
 
-## 🔄 세션 복원 및 신속 작업 규칙
+## 🔄 3. 빌드, 배포 및 테스트 가이드
 
-사용자가 **"대화창 불러와줘"**, **"작업 이어해줘"**, **"세션 복원해줘"** 등을 입력할 경우:
-1. `SOYO_기능.txt` 및 `SOYO_FE_BE_변수명.txt`의 현재 작업 진행 상태를 확인합니다.
-2. 프론트엔드가 요구하는 특정 화면/기능의 백엔드 API가 구현되어 있는지 점검합니다.
-3. 작업 디렉터리(`d:\관광데이터\PIP-Backend`) 상태를 진단하고 즉시 다음 개발 단계로 진입합니다.
+### 배포 파이프라인
+* 로컬에서 수정한 코드는 반드시 `npm run build` 무결성 검증을 거친 후 GitHub `main` 브랜치로 커밋 & 푸시합니다.
+* GitHub `main`에 푸시되면 AWS Amplify(`https://main.d3p7uoybais0cu.amplifyapp.com/`)가 약 1~2분 내에 자동 빌드/배포합니다.
+
+### 개발자 도구 디버깅
+* **F12 `Console` 탭**: 프론트엔드 에러 및 로그 모니터링
+* **F12 `Network` 탭**: `/api/auth/...` 백엔드 HTTP 통신 상태(200, 400 등) 확인
+* **모바일 반응형 뒤로가기**: 키보드 `Alt + ←` 또는 마이페이지 내 로그아웃 사용
