@@ -42,11 +42,15 @@ lib/                  DB, Supabase 연결
 docs/API.md           ★ API 명세 (프론트와의 약속)
 ```
 
+## API 테스트
+VS Code 에서 `api-test.http` 를 열고 요청 위의 **Send Request** 클릭 (REST Client 확장 필요 — 권장 확장으로 자동 안내됨). 자세한 방법은 [가이드 4번](docs/GUIDE.md#4--내가-만든-거-테스트하기).
+
 ## 새 API 추가하는 법
 1. `docs/API.md` 에 명세를 먼저 적고 단톡방에 공유
 2. `routes/` 에 파일 생성 (예: `routes/comments.js`, `routes/posts.js` 참고)
 3. `index.js` 에 한 줄 추가: `app.use('/api/comments', require('./routes/comments'));`
 4. 로그인이 필요하면 `authenticateToken` 미들웨어를 붙이면 `req.user` 를 쓸 수 있음
+5. `api-test.http` 에 테스트 요청 추가
 
 ## 협업 규칙
 1. `main` 에서 바로 작업하지 말고 `작업시작.bat` 으로 작업 공간 만들기
