@@ -38,10 +38,12 @@ function getEmailTransporter() {
   const smtpPass = process.env.SMTP_PASS || process.env.SMTP_PASSWORD;
 
   if (smtpUser && smtpPass) {
+    const port = Number(process.env.SMTP_PORT) || 587;
+    const isSecure = port === 465 || process.env.SMTP_SECURE === 'true';
     return nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: Number(process.env.SMTP_PORT) || 587,
-      secure: Number(process.env.SMTP_PORT) === 465,
+      port,
+      secure: isSecure,
       auth: {
         user: smtpUser,
         pass: smtpPass
@@ -51,17 +53,17 @@ function getEmailTransporter() {
   return null;
 }
 
-// 이메일 인증 코드 발송 (실제 6자리 랜덤 생성 및 SMTP 발송)
+// 이메일 인증 코드 발송 (암호학적 6자리 랜덤 생성 및 SMTP 실전송)
 router.post('/email/send-code', async (req, res) => {
   try {
     const { email } = req.body;
     if (!email || !email.includes('@')) {
-      return res.status(400).json({ error: '올바른 이메일 주소를 입력해주세요.' });
+      return res.status(400).json({ success: false, error: '올바른 이메일 주소를 입력해주세요.' });
     }
 
     const cleanEmail = email.toLowerCase().trim();
-    // 6자리 난수 생성 (100000 ~ 999999)
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    // 암호학적 6자리 난수 생성 (100000 ~ 999999)
+    const code = crypto.randomInt(100000, 1000000).toString();
     const expiresAt = Date.now() + 5 * 60 * 1000; // 5분 유효
 
     emailVerificationCodes.set(cleanEmail, {
@@ -99,22 +101,22 @@ router.post('/email/send-code', async (req, res) => {
         console.error('❌ [SMTP 발송 실패]:', mailErr.message);
         console.log(`📨 [인증번호 콘솔 백업] 대상: ${cleanEmail}, 코드: [${code}]`);
         return res.status(500).json({
+          success: false,
           error: '메일 발송 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
         });
       }
     } else {
-      // SMTP 미설정 환경 (로컬 개발 및 시연 모드 콘솔 출력)
+      // SMTP 미설정 개발 환경: 사용자에게 명확히 알리고 콘솔 출력
       console.log(`📨 [이메일 인증번호 생성 (SMTP 미설정 모드)] 대상: ${cleanEmail}, 코드: [${code}] (유효시간: 5분)`);
       return res.json({
         success: true,
-        message: '인증코드가 발송되었습니다. 메일함을 확인해주세요.',
-        // SMTP 미설정 개발 환경일 때 백엔드 디버깅용 필드 (UI에는 노출되지 않음)
+        message: '인증코드가 발송되었습니다. (SMTP 미설정 개발 모드: 백엔드 터미널의 인증번호를 확인해 주세요)',
         debugCode: process.env.NODE_ENV !== 'production' ? code : undefined
       });
     }
   } catch (err) {
     console.error('이메일 발송 라우트 에러:', err);
-    return res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
+    return res.status(500).json({ success: false, error: '서버 내부 오류가 발생했습니다.' });
   }
 });
 
@@ -123,39 +125,39 @@ router.post('/email/verify-code', (req, res) => {
   try {
     const { email, code } = req.body;
     if (!email || !code) {
-      return res.status(400).json({ verified: false, error: '이메일과 인증코드를 모두 입력해주세요.' });
+      return res.status(400).json({ success: false, verified: false, error: '이메일과 인증코드를 모두 입력해주세요.' });
     }
 
     const cleanEmail = email.toLowerCase().trim();
     const entry = emailVerificationCodes.get(cleanEmail);
 
     if (!entry) {
-      return res.status(400).json({ verified: false, error: '발송된 인증코드가 없습니다. 먼저 인증번호를 발송해주세요.' });
+      return res.status(400).json({ success: false, verified: false, error: '발송된 인증코드가 없습니다. 먼저 인증번호를 발송해주세요.' });
     }
 
     if (Date.now() > entry.expiresAt) {
       emailVerificationCodes.delete(cleanEmail);
-      return res.status(400).json({ verified: false, error: '인증코드 유효시간(5분)이 만료되었습니다. 다시 발송해주세요.' });
+      return res.status(400).json({ success: false, verified: false, error: '인증코드 유효시간(5분)이 만료되었습니다. 다시 발송해주세요.' });
     }
 
     if (entry.attempts >= 5) {
       emailVerificationCodes.delete(cleanEmail);
-      return res.status(400).json({ verified: false, error: '인증 시도 횟수를 초과했습니다. 다시 발송해주세요.' });
+      return res.status(400).json({ success: false, verified: false, error: '인증 시도 횟수를 초과했습니다. 다시 발송해주세요.' });
     }
 
     entry.attempts += 1;
 
     if (entry.code !== String(code).trim()) {
-      return res.status(400).json({ verified: false, error: '인증번호가 일치하지 않습니다. 다시 확인해주세요.' });
+      return res.status(400).json({ success: false, verified: false, error: '인증번호가 일치하지 않습니다. 다시 확인해주세요.' });
     }
 
     // 인증 성공 — 1회 사용 완료 후 파기
     emailVerificationCodes.delete(cleanEmail);
     console.log(`✅ [이메일 인증 성공] 대상: ${cleanEmail}`);
-    return res.json({ verified: true, message: '이메일 인증이 완료되었습니다.' });
+    return res.json({ success: true, verified: true, message: '이메일 인증이 완료되었습니다.' });
   } catch (err) {
     console.error('인증코드 검증 라우트 에러:', err);
-    return res.status(500).json({ verified: false, error: '서버 내부 오류가 발생했습니다.' });
+    return res.status(500).json({ success: false, verified: false, error: '서버 내부 오류가 발생했습니다.' });
   }
 });
 
@@ -250,25 +252,30 @@ router.post('/profile', async (req, res) => {
       console.warn('⚠️ [AWS RDS] DATABASE_URL 미설정으로 DB 저장을 건너뜁니다.');
     }
 
+    const formattedBirthDate = String(birth).split('T')[0];
+
+    const profileData = {
+      userId: validUserId,
+      userName: name,
+      birthDate: formattedBirthDate,
+      age: calculatedAge,
+      allergies: finalAllergies,
+      chronicConditions: finalDiseases,
+      diseaseIds: finalDiseases,
+      medications: finalMedications,
+      hasMedication
+    };
+
     return res.json({
       success: true,
       message: '프로필 정보가 성공적으로 처리되었습니다.',
       savedInDb,
-      profile: {
-        userId: validUserId,
-        userName: name,
-        birthDate: birth,
-        age: calculatedAge,
-        allergies: finalAllergies,
-        chronicConditions: finalDiseases,
-        diseaseIds: finalDiseases,
-        medications: finalMedications,
-        hasMedication
-      }
+      profile: profileData,
+      data: profileData
     });
   } catch (err) {
     console.error('프로필 처리 오류:', err);
-    return res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
+    return res.status(500).json({ success: false, error: '서버 내부 오류가 발생했습니다.' });
   }
 });
 
@@ -277,13 +284,13 @@ router.get('/profile/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     if (!process.env.DATABASE_URL) {
-      return res.status(503).json({ error: 'DB가 설정되지 않았습니다.' });
+      return res.status(503).json({ success: false, error: 'DB가 설정되지 않았습니다.' });
     }
 
     const validUserId = toUuid(userId);
     const result = await pool.query('SELECT * FROM user_profiles WHERE id = $1', [validUserId]);
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: '프로필을 찾을 수 없습니다.' });
+      return res.status(404).json({ success: false, error: '프로필을 찾을 수 없습니다.' });
     }
 
     const profileRow = result.rows[0];
@@ -298,23 +305,32 @@ router.get('/profile/:userId', async (req, res) => {
       ? profileRow.chronic_conditions
       : (profileRow.chronic_conditions ? String(profileRow.chronic_conditions).split(', ') : []);
 
+    const formattedBirthDate = profileRow.birth_date
+      ? (profileRow.birth_date instanceof Date
+          ? profileRow.birth_date.toISOString().split('T')[0]
+          : String(profileRow.birth_date).split('T')[0])
+      : '1970-01-01';
+
+    const profileData = {
+      userId: profileRow.id,
+      userName: profileRow.user_name,
+      birthDate: formattedBirthDate,
+      age: profileRow.age,
+      chronicConditions,
+      diseaseIds: chronicConditions,
+      allergies,
+      hasMedication: profileRow.has_medication,
+      medications
+    };
+
     return res.json({
       success: true,
-      profile: {
-        userId: profileRow.id,
-        userName: profileRow.user_name,
-        birthDate: profileRow.birth_date,
-        age: profileRow.age,
-        chronicConditions,
-        diseaseIds: chronicConditions,
-        allergies,
-        hasMedication: profileRow.has_medication,
-        medications
-      }
+      profile: profileData,
+      data: profileData
     });
   } catch (err) {
     console.error('프로필 조회 오류:', err);
-    return res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
+    return res.status(500).json({ success: false, error: '서버 내부 오류가 발생했습니다.' });
   }
 });
 

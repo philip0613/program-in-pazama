@@ -48,19 +48,28 @@ router.get('/profile', async (req, res) => {
       ? profileRow.chronic_conditions
       : (profileRow.chronic_conditions ? String(profileRow.chronic_conditions).split(', ') : []);
 
+    const formattedBirthDate = profileRow.birth_date
+      ? (profileRow.birth_date instanceof Date
+          ? profileRow.birth_date.toISOString().split('T')[0]
+          : String(profileRow.birth_date).split('T')[0])
+      : '1970-01-01';
+
+    const profileData = {
+      userId: profileRow.id,
+      userName: profileRow.user_name,
+      birthDate: formattedBirthDate,
+      age: profileRow.age,
+      chronicConditions,
+      diseaseIds: chronicConditions,
+      allergies,
+      hasMedication: profileRow.has_medication,
+      medications
+    };
+
     return res.json({
       success: true,
-      data: {
-        userId: profileRow.id,
-        userName: profileRow.user_name,
-        birthDate: profileRow.birth_date,
-        age: profileRow.age,
-        chronicConditions,
-        diseaseIds: chronicConditions,
-        allergies,
-        hasMedication: profileRow.has_medication,
-        medications
-      }
+      profile: profileData,
+      data: profileData
     });
   } catch (err) {
     console.error('user 프로필 조회 오류:', err);
@@ -73,12 +82,17 @@ router.put('/profile', async (req, res) => {
   try {
     const {
       userId,
+      name,
       userName,
+      birth,
       birthDate,
       allergies = [],
       diseases = [],
       diseaseIds = [],
-      medications = []
+      medications = [],
+      noAllergy = false,
+      noDisease = false,
+      noMedication = false
     } = req.body;
 
     const targetUserId = userId || req.headers['x-user-id'];
@@ -87,16 +101,19 @@ router.put('/profile', async (req, res) => {
     }
 
     const validUserId = toUuid(targetUserId);
+    const finalUserName = name || userName || '소요 여행자';
+    const finalBirthDateRaw = birth || birthDate || '1970-01-01';
+    const formattedBirthDate = String(finalBirthDateRaw).split('T')[0];
 
-    const finalAllergies = Array.isArray(allergies) ? allergies : [allergies].filter(Boolean);
+    const finalAllergies = noAllergy ? [] : (Array.isArray(allergies) ? allergies : [allergies].filter(Boolean));
     const rawDiseases = diseases.length > 0 ? diseases : diseaseIds;
-    const finalDiseases = Array.isArray(rawDiseases) ? rawDiseases : [rawDiseases].filter(Boolean);
-    const finalMedications = Array.isArray(medications) ? medications : [medications].filter(Boolean);
+    const finalDiseases = noDisease ? [] : (Array.isArray(rawDiseases) ? rawDiseases : [rawDiseases].filter(Boolean));
+    const finalMedications = noMedication ? [] : (Array.isArray(medications) ? medications : [medications].filter(Boolean));
     const hasMedication = finalMedications.length > 0;
 
     let calculatedAge = 50;
-    if (birthDate) {
-      const birthYear = new Date(birthDate).getFullYear();
+    if (formattedBirthDate) {
+      const birthYear = new Date(formattedBirthDate).getFullYear();
       if (!isNaN(birthYear)) {
         calculatedAge = Math.max(0, new Date().getFullYear() - birthYear);
       }
@@ -119,40 +136,42 @@ router.put('/profile', async (req, res) => {
       `;
       await pool.query(profileQuery, [
         validUserId,
-        userName || '소요 여행자',
-        birthDate || '1970-01-01',
+        finalUserName,
+        formattedBirthDate,
         calculatedAge,
         finalDiseases,
         finalAllergies,
         hasMedication
       ]);
 
-      if (finalMedications.length > 0) {
-        await pool.query('DELETE FROM user_medications WHERE user_id = $1', [validUserId]);
-        for (const med of finalMedications) {
-          await pool.query(`
-            INSERT INTO user_medications (id, user_id, name, timing)
-            VALUES (gen_random_uuid(), $1, $2, '식후')
-          `, [validUserId, med]);
-        }
+      // 복용 약물 목록 갱신 (전체 삭제 후 재등록 — 약물이 없으면 비움)
+      await pool.query('DELETE FROM user_medications WHERE user_id = $1', [validUserId]);
+      for (const med of finalMedications) {
+        await pool.query(`
+          INSERT INTO user_medications (id, user_id, name, timing)
+          VALUES (gen_random_uuid(), $1, $2, '식후')
+        `, [validUserId, med]);
       }
 
       console.log(`✅ [AWS RDS] /api/user/profile 수정 완료: (${validUserId})`);
     }
 
+    const profileData = {
+      userId: validUserId,
+      userName: finalUserName,
+      birthDate: formattedBirthDate,
+      age: calculatedAge,
+      allergies: finalAllergies,
+      diseaseIds: finalDiseases,
+      chronicConditions: finalDiseases,
+      medications: finalMedications,
+      hasMedication
+    };
+
     return res.json({
       success: true,
-      data: {
-        userId: validUserId,
-        userName,
-        birthDate,
-        age: calculatedAge,
-        allergies: finalAllergies,
-        diseaseIds: finalDiseases,
-        chronicConditions: finalDiseases,
-        medications: finalMedications,
-        hasMedication
-      }
+      profile: profileData,
+      data: profileData
     });
   } catch (err) {
     console.error('user 프로필 수정 오류:', err);

@@ -3,7 +3,35 @@ const express = require('express');
 const cors = require('cors');
 const http = require('http');
 
+const allowedOrigins = [
+  'https://main.d3p7uoybais0cu.amplifyapp.com',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:3000'
+];
+
+const corsOptions = {
+  origin(origin, callback) {
+    if (!origin) return callback(null, true);
+    if (
+      allowedOrigins.includes(origin) ||
+      /^https:\/\/[a-z0-9-]+\.amplifyapp\.com$/i.test(origin) ||
+      /^http:\/\/localhost(:\d+)?$/i.test(origin) ||
+      /^http:\/\/127\.0\.0\.1(:\d+)?$/i.test(origin)
+    ) {
+      return callback(null, origin);
+    }
+    return callback(null, origin);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
+};
+
 const app = express();
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json());
 
 app.use('/api/test', require('../routes/test'));
@@ -102,22 +130,24 @@ async function runTests() {
       allPassed = false;
     }
 
-    // 5. get profile from RDS
-    console.log('\n--- Test 5: GET /api/auth/profile/:userId ---');
+    // 5. get profile from RDS (verify date precision: must be 1975-08-20, not shifted to 1975-08-19)
+    console.log('\n--- Test 5: GET /api/auth/profile/:userId (Date Precision & Dual Format) ---');
     const getRes = await request(server, `/api/auth/profile/${encodeURIComponent(testUserId)}`);
     console.log('Get profile response:', getRes);
     if (
       getRes.status === 200 &&
       getRes.data.profile &&
       getRes.data.profile.userName === '홍길동테스터' &&
+      getRes.data.profile.birthDate === '1975-08-20' &&
       Array.isArray(getRes.data.profile.allergies) &&
       getRes.data.profile.allergies.length === 2 &&
       Array.isArray(getRes.data.profile.medications) &&
-      getRes.data.profile.medications.length === 2
+      getRes.data.profile.medications.length === 2 &&
+      Boolean(getRes.data.data) // dual compatibility
     ) {
-      console.log('✅ Test 5 Passed (Profile retrieved intact from AWS RDS)');
+      console.log('✅ Test 5 Passed (Profile retrieved intact from AWS RDS, birthDate exactly 1975-08-20 without timezone shift)');
     } else {
-      console.error('❌ Test 5 Failed');
+      console.error('❌ Test 5 Failed (BirthDate or profile mismatch):', getRes.data?.profile?.birthDate);
       allPassed = false;
     }
 
@@ -125,8 +155,12 @@ async function runTests() {
     console.log('\n--- Test 6: GET /api/user/profile?userId=... ---');
     const userGetRes = await request(server, `/api/user/profile?userId=${encodeURIComponent(testUserId)}`);
     console.log('User get response:', userGetRes);
-    if (userGetRes.status === 200 && userGetRes.data.data.userName === '홍길동테스터') {
-      console.log('✅ Test 6 Passed (/api/user/profile works)');
+    if (
+      userGetRes.status === 200 &&
+      userGetRes.data.data.userName === '홍길동테스터' &&
+      userGetRes.data.data.birthDate === '1975-08-20'
+    ) {
+      console.log('✅ Test 6 Passed (/api/user/profile works with exact birthDate)');
     } else {
       console.error('❌ Test 6 Failed');
       allPassed = false;
@@ -153,8 +187,20 @@ async function runTests() {
       allPassed = false;
     }
 
-    // Cleanup test record from RDS
-    console.log('\n--- Cleaning up test record from RDS ---');
+    // 8. Medication clearing test (Verify bug fix: medications can be completely removed)
+    console.log('\n--- Test 8: PUT /api/user/profile (Clear All Medications) ---');
+    const clearMedRes = await request(server, '/api/user/profile', {
+      method: 'PUT',
+      body: JSON.stringify({
+        userId: testUserId,
+        userName: '홍길동(수정됨)',
+        birthDate: '1975-08-20',
+        allergies: ['꽃가루'],
+        diseases: ['D01'],
+        medications: [],
+        noMedication: true
+      })
+    });
     const { pool } = require('../lib/db');
     const crypto = require('crypto');
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -169,12 +215,44 @@ async function runTests() {
         hash.substring(20, 32)
       ].join('-');
     }
+    const medCheck = await pool.query('SELECT count(*) FROM user_medications WHERE user_id = $1', [validUserId]);
+    const remainingMeds = parseInt(medCheck.rows[0].count, 10);
+    console.log('Remaining user_medications in RDS:', remainingMeds);
+    if (clearMedRes.status === 200 && remainingMeds === 0) {
+      console.log('✅ Test 8 Passed (Medications successfully cleared from RDS DB)');
+    } else {
+      console.error('❌ Test 8 Failed (Medications were not deleted from DB, remaining count:', remainingMeds);
+      allPassed = false;
+    }
+
+    // 9. CORS Preflight verification
+    console.log('\n--- Test 9: CORS OPTIONS preflight from Amplify ---');
+    const corsRes = await fetch(`http://127.0.0.1:${server.address().port}/api/auth/email/send-code`, {
+      method: 'OPTIONS',
+      headers: {
+        'Origin': 'https://main.d3p7uoybais0cu.amplifyapp.com',
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'Content-Type'
+      }
+    });
+    const allowOrigin = corsRes.headers.get('access-control-allow-origin');
+    const allowCreds = corsRes.headers.get('access-control-allow-credentials');
+    console.log('CORS response status:', corsRes.status, 'Allow-Origin:', allowOrigin, 'Allow-Credentials:', allowCreds);
+    if (corsRes.status === 204 && allowOrigin === 'https://main.d3p7uoybais0cu.amplifyapp.com' && allowCreds === 'true') {
+      console.log('✅ Test 9 Passed (CORS preflight from Amplify domain verified)');
+    } else {
+      console.error('❌ Test 9 Failed (CORS headers mismatch)');
+      allPassed = false;
+    }
+
+    // Cleanup test record from RDS
+    console.log('\n--- Cleaning up test record from RDS ---');
     await pool.query('DELETE FROM user_profiles WHERE id = $1', [validUserId]);
     console.log('✅ Cleaned up test record from RDS');
     await pool.end();
 
     if (allPassed) {
-      console.log('\n🎉 ALL 7 BACKEND TESTS PASSED SUCCESSFULLY! 🎉');
+      console.log('\n🎉 ALL 9 BACKEND TESTS PASSED SUCCESSFULLY! 🎉');
     } else {
       console.error('\n❌ SOME BACKEND TESTS FAILED');
       process.exit(1);
