@@ -6,27 +6,17 @@ const { initDB } = require('./lib/db');
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// CORS 허용 출처 (추가 출처는 CORS_ORIGINS 환경 변수에 콤마로 구분해 지정)
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:3000',
-  'https://main.d3p7uoybais0cu.amplifyapp.com',
-  'https://main.darvmwywsdw78.amplifyapp.com',
-  ...(process.env.CORS_ORIGINS || '').split(',').map((o) => o.trim()).filter(Boolean)
-];
-
-// Amplify 앱의 브랜치/PR 미리보기 및 Amplify 호스트 허용 패턴
-const amplifyPreviewPattern = /^https:\/\/[a-z0-9-]+\.(d3p7uoybais0cu|darvmwywsdw78|[a-z0-9-]+)\.amplifyapp\.com$/;
-
+// CORS 설정 (Amplify, localhost 및 모든 출처의 프리플라이트 OPTIONS 허용)
 app.use(cors({
   origin(origin, callback) {
-    // Origin 헤더가 없는 요청(curl, 서버 간 호출, 헬스체크)은 허용
-    if (!origin || allowedOrigins.includes(origin) || amplifyPreviewPattern.test(origin)) {
-      return callback(null, true);
-    }
-    callback(null, false);
-  }
+    // curl, 서버 간 호출 등 origin이 없거나 브라우저 호출은 모두 허용
+    return callback(null, true);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
+app.options('*', cors());
 app.use(express.json());
 
 initDB();
